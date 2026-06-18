@@ -1,37 +1,33 @@
 #include <kos.h>
 #include <dc/maple.h>
 #include <dc/maple/controller.h>
-#include <dc/kgl.h>
+#include <dc/video.h>
 #include <math.h>
+#include <string.h>
 
-void draw_box(float x, float y, float z, float w, float h, float d) {
-    glBegin(GL_QUADS);
-    glVertex3f(x, y, z+d); glVertex3f(x+w, y, z+d); glVertex3f(x+w, y+h, z+d); glVertex3f(x, y+h, z+d);
-    glVertex3f(x, y, z); glVertex3f(x, y+h, z); glVertex3f(x+w, y+h, z); glVertex3f(x+w, y, z);
-    glVertex3f(x, y, z); glVertex3f(x, y, z+d); glVertex3f(x, y+h, z+d); glVertex3f(x, y+h, z);
-    glVertex3f(x+w, y, z); glVertex3f(x+w, y+h, z); glVertex3f(x+w, y+h, z+d); glVertex3f(x+w, y, z+d);
-    glVertex3f(x, y+h, z); glVertex3f(x, y+h, z+d); glVertex3f(x+w, y+h, z+d); glVertex3f(x+w, y+h, z);
-    glVertex3f(x, y, z); glVertex3f(x+w, y, z); glVertex3f(x+w, y, z+d); glVertex3f(x, y, z+d);
-    glEnd();
+#define W 640
+#define H 480
+
+void draw_pixel(int x, int y, uint16 color) {
+    if(x >= 0 && x < W && y >= 0 && y < H) {
+        vram_s[y * W + x] = color;
+    }
+}
+
+void draw_line(int x1, int y1, int x2, int y2, uint16 color) {
+    int dx = abs(x2-x1), sx = x1<x2 ? 1 : -1;
+    int dy = -abs(y2-y1), sy = y1<y2 ? 1 : -1; 
+    int err = dx+dy, e2;
+    while(1) {
+        draw_pixel(x1, y1, color);
+        if (x1==x2 && y1==y2) break;
+        e2 = 2*err;
+        if (e2 > dy) { err += dy; x1 += sx; }
+        else if (e2 < dx) { err += dx; y1 += sy; }
+    }
 }
 
 int main(int argc, char **argv) {
-    glKosInit();
-    glClearColor(0.2f, 0.2f, 0.5f, 1.0f);
-    glEnable(GL_DEPTH_TEST);
-    
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    float fovy = 45.0f * 3.14159f / 180.0f;
-    float f = 1.0f / tanf(fovy / 2.0f);
-    float m[16] = {
-        f / (640.0f/480.0f), 0, 0, 0,
-        0, f, 0, 0,
-        0, 0, -101.0f / 99.0f, -1.0f,
-        0, 0, -2.0f * 100.0f / 99.0f, 0
-    };
-    glLoadMatrixf(m);
-    
     float px = 0, py = 0, pz = 0, yaw = 0, vy = 0;
     int on_ground = 1;
     
@@ -58,35 +54,49 @@ int main(int argc, char **argv) {
         py += vy * 0.016f;
         if(py <= 0) { py = 0; vy = 0; on_ground = 1; }
         
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
+        memset(vram_s, 0, W * H * 2); // Czyszczenie ekranu
         
-        glTranslatef(0, -4.0f, -8.0f);
-        glRotatef(-yaw * 180.0f / 3.14159f, 0, 1, 0);
-        glTranslatef(-px, -py, -pz);
+        float cos_y = cosf(yaw), sin_y = sinf(yaw);
+        float cam_y = py + 5.0f;
         
-        glColor3f(0.3f, 0.3f, 0.3f);
-        glBegin(GL_QUADS);
-        glVertex3f(-100, 0, -100); glVertex3f(100, 0, -100); 
-        glVertex3f(100, 0, 100); glVertex3f(-100, 0, 100);
-        glEnd();
+        // Rysowanie podlogi 3D (Siatka)
+        for(int i = -100; i <= 100; i += 10) {
+            float x1 = i - px, z1 = -100 - pz;
+            float x2 = i - px, z2 = 100 - pz;
+            float rx1 = x1 * cos_y - z1 * sin_y;
+            float rz1 = x1 * sin_y + z1 * cos_y;
+            float rx2 = x2 * cos_y - z2 * sin_y;
+            float rz2 = x2 * sin_y + z2 * cos_y;
+            
+            if(rz1 > 1 && rz2 > 1) {
+                int sx1 = (rx1 * 400.0f / rz1) + W/2;
+                int sy1 = ((0 - cam_y) * 400.0f / rz1) + H/2;
+                int sx2 = (rx2 * 400.0f / rz2) + W/2;
+                int sy2 = ((0 - cam_y) * 400.0f / rz2) + H/2;
+                draw_line(sx1, sy1, sx2, sy2, 0x7BEF);
+            }
+            
+            x1 = -100 - px; z1 = i - pz;
+            x2 = 100 - px; z2 = i - pz;
+            rx1 = x1 * cos_y - z1 * sin_y;
+            rz1 = x1 * sin_y + z1 * cos_y;
+            rx2 = x2 * cos_y - z2 * sin_y;
+            rz2 = x2 * sin_y + z2 * cos_y;
+            
+            if(rz1 > 1 && rz2 > 1) {
+                int sx1 = (rx1 * 400.0f / rz1) + W/2;
+                int sy1 = ((0 - cam_y) * 400.0f / rz1) + H/2;
+                int sx2 = (rx2 * 400.0f / rz2) + W/2;
+                int sy2 = ((0 - cam_y) * 400.0f / rz2) + H/2;
+                draw_line(sx1, sy1, sx2, sy2, 0x7BEF);
+            }
+        }
         
-        glColor3f(0.8f, 0.2f, 0.2f);
-        draw_box(-20, 0, 20, 10, 15, 10);
-        glColor3f(0.2f, 0.8f, 0.2f);
-        draw_box(15, 0, -30, 12, 25, 12);
+        // Celownik
+        draw_line(W/2 - 10, H/2, W/2 + 10, H/2, 0xFFFF);
+        draw_line(W/2, H/2 - 10, W/2, H/2 + 10, 0xFFFF);
         
-        glPushMatrix();
-        glTranslatef(px, py, pz);
-        glRotatef(yaw * 180.0f / 3.14159f, 0.0f, 1.0f, 0.0f);
-        glColor3f(0.1f, 0.5f, 0.1f); 
-        draw_box(-0.4f, 0.0f, -0.3f, 0.8f, 1.2f, 0.6f);
-        glColor3f(0.8f, 0.6f, 0.4f); 
-        draw_box(-0.25f, 1.2f, -0.25f, 0.5f, 0.5f, 0.5f);
-        glPopMatrix();
-        
-        glKosSwapBuffers();
+        vid_waitvbl();
     }
     return 0;
 }
