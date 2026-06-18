@@ -7,52 +7,53 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: nold360/kallistios-sdk
-    # Dodajemy zmienną środowiskową, aby wymusić Node 20 (Node 24 nie działa na starym kontenerze)
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    # NIE UŻYWAMY TUTAJ 'container:', aby uniknąć błędów GLIBC z Node.js
     
     steps:
       - name: "Pobranie kodu"
         uses: actions/checkout@v4
 
-      - name: "Instalacja biblioteki GLdc"
+      - name: "Pobranie GLdc na serwerze"
         run: |
-          source /opt/toolchains/dc/kos/kos/environ.sh
-          echo "Pobieranie i kompilacja GLdc..."
           git clone https://github.com/Kazade/GLdc.git
-          cd GLdc
-          make -j4
-          cp libGLdc.a /opt/toolchains/dc/kos/addons/lib/dreamcast/
-          mkdir -p /opt/toolchains/dc/kos/addons/include/GL
-          cp GL/gl.h GL/glu.h GL/glkos.h /opt/toolchains/dc/kos/addons/include/GL/
 
-      - name: "Kompilacja Gry"
+      - name: "Kompilacja GLdc, Gry i tworzenie CDI w Dockerze"
         run: |
-          source /opt/toolchains/dc/kos/kos/environ.sh
-          make
-
-      - name: "Tworzenie pliku CDI"
-        run: |
-          source /opt/toolchains/dc/kos/kos/environ.sh
-          sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
-          scramble main.bin 1ST_READ.BIN
-          
-          echo "Hardware ID   : SEGA SEGAKATANA" > ip.txt
-          echo "Maker ID      : SEGA ENTERPRISES" >> ip.txt
-          echo "Device Info   : 0x0000 GD-ROM1/1 0000000000000000" >> ip.txt
-          echo "Area Symbols  : 0x00000000" >> ip.txt
-          echo "Peripherals   : 0x00000000" >> ip.txt
-          echo "Product Number: 0000000000000000" >> ip.txt
-          echo "Version       : V1.000" >> ip.txt
-          echo "Release Date  : 20230101" >> ip.txt
-          echo "Boot Filename : 1ST_READ.BIN" >> ip.txt
-          echo "SW Maker Name : GITHUB" >> ip.txt
-          echo "Game Title    : GTA SA DC" >> ip.txt
-          
-          makeip ip.txt IP.BIN
-          genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
-          cdi4dc game.iso MojaGra_GTA.cdi -d
+          docker run --rm -v ${{ github.workspace }}:/src nold360/kallistios-sdk /bin/bash -c "
+            source /opt/toolchains/dc/kos/kos/environ.sh
+            cd /src
+            
+            echo 'Kompilacja GLdc...'
+            cd GLdc
+            make -j4
+            cp libGLdc.a /opt/toolchains/dc/kos/addons/lib/dreamcast/
+            mkdir -p /opt/toolchains/dc/kos/addons/include/GL
+            cp GL/gl.h GL/glu.h GL/glkos.h /opt/toolchains/dc/kos/addons/include/GL/
+            
+            cd /src
+            echo 'Kompilacja Gry...'
+            make
+            
+            echo 'Tworzenie obrazu plyty...'
+            sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
+            scramble main.bin 1ST_READ.BIN
+            
+            echo 'Hardware ID   : SEGA SEGAKATANA' > ip.txt
+            echo 'Maker ID      : SEGA ENTERPRISES' >> ip.txt
+            echo 'Device Info   : 0x0000 GD-ROM1/1 0000000000000000' >> ip.txt
+            echo 'Area Symbols  : 0x00000000' >> ip.txt
+            echo 'Peripherals   : 0x00000000' >> ip.txt
+            echo 'Product Number: 0000000000000000' >> ip.txt
+            echo 'Version       : V1.000' >> ip.txt
+            echo 'Release Date  : 20230101' >> ip.txt
+            echo 'Boot Filename : 1ST_READ.BIN' >> ip.txt
+            echo 'SW Maker Name : GITHUB' >> ip.txt
+            echo 'Game Title    : GTA SA DC' >> ip.txt
+            
+            makeip ip.txt IP.BIN
+            genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
+            cdi4dc game.iso MojaGra_GTA.cdi -d
+          "
 
       - name: "Zapisanie pliku .cdi"
         uses: actions/upload-artifact@v4
