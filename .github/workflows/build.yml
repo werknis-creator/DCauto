@@ -19,6 +19,18 @@ jobs:
           echo "Klonowanie silnika Simulant..."
           git clone --recursive https://github.com/Kazade/simulant-engine.git
 
+      - name: "Generowanie pliku CMakeLists.txt w chmurze"
+        run: |
+          echo "Tworzenie pliku CMakeLists.txt automatycznie..."
+          echo "cmake_minimum_required(VERSION 3.10)" > CMakeLists.txt
+          echo "project(GTASA_DC CXX)" >> CMakeLists.txt
+          echo "set(CMAKE_CXX_STANDARD 11)" >> CMakeLists.txt
+          echo "add_subdirectory(simulant-engine)" >> CMakeLists.txt
+          echo "add_executable(my_game.elf main.cpp)" >> CMakeLists.txt
+          echo "target_link_libraries(my_game.elf PRIVATE simulant)" >> CMakeLists.txt
+          echo "target_include_directories(my_game.elf PRIVATE \${CMAKE_CURRENT_SOURCE_DIR}/simulant-engine/simulant/include)" >> CMakeLists.txt
+          echo "Plik CMakeLists.txt zostal stworzony!"
+
       - name: "Konfiguracja i Kompilacja Gry oraz Silnika"
         run: |
           source /etc/bash.bashrc
