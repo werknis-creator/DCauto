@@ -1,4 +1,4 @@
-name: GTA SA DC Simulant Fixed
+name: GTA SA DC GLdc
 
 on:
   push:
@@ -7,68 +7,34 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: kazade/dreamcast-sdk
+    container: nold360/kallistios-sdk
     
     steps:
-      - name: "Pobranie kodu gry z repozytorium"
+      - name: "Pobranie kodu"
         uses: actions/checkout@v4
 
-      - name: "Pobranie Silnika Simulant i Fix Brakujacych Plikow"
+      - name: "Instalacja biblioteki GLdc"
         run: |
-          source /etc/bash.bashrc
-          echo "Klonowanie silnika Simulant..."
-          git clone --recursive https://github.com/Kazade/simulant-engine.git
-          
-          echo "Tworzenie brakujacych folderow i plikow, aby oszukac CMake..."
-          mkdir -p simulant-engine/assets
-          mkdir -p simulant-engine/cmake_modules
-          touch simulant-engine/cmake_modules/simulant-config.cmake
-          
-          mkdir -p simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/
-          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_complex_sh4.inl.h
-          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_trig_sh4.inl.h
-          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_mem_sh4.inl.h
-          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_quat_sh4.inl.h
-          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_matrix_sh4.inl.h
-          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_vector_sh4.inl.h
-          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_scalar_sh4.inl.h
-          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_xmtrx_sh4.inl.h
-
-      - name: "Kompilacja i Instalacja Silnika Simulant"
-        run: |
-          source /etc/bash.bashrc
-          echo "Wchodze do folderu silnika..."
-          cd simulant-engine
-          mkdir build && cd build
-          
-          echo "Konfiguracja CMake..."
-          cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/Dreamcast.cmake -DCMAKE_BUILD_TYPE=Release ..
-          
-          echo "Kompilacja silnika..."
+          source /opt/toolchains/dc/kos/kos/environ.sh
+          echo "Pobieranie i kompilacja GLdc..."
+          git clone https://github.com/Kazade/GLdc.git
+          cd GLdc
           make -j4
-          
-          echo "Instalacja silnika do toolchaina..."
-          make install
+          cp libGLdc.a /opt/toolchains/dc/kos/addons/lib/dreamcast/
+          mkdir -p /opt/toolchains/dc/kos/addons/include/GL
+          cp GL/gl.h GL/glu.h GL/glkos.h /opt/toolchains/dc/kos/addons/include/GL/
 
-      - name: "Budowa Wlasciwej Gry"
+      - name: "Kompilacja Gry"
         run: |
-          source /etc/bash.bashrc
-          mkdir -p game_build
-          echo "Kompilacja gry bezposrednio kompilatorem kos-c++..."
-          kos-c++ -O2 -I/opt/toolchains/dc/kos/addons/include -o game_build/my_game.elf $GITHUB_WORKSPACE/main.cpp -L/opt/toolchains/dc/kos/addons/lib/dreamcast -lsimulant -lGLdc -lsh4zam
+          source /opt/toolchains/dc/kos/kos/environ.sh
+          make
 
-      - name: "Pakowanie do formatu CDI Obraz plyty"
+      - name: "Tworzenie pliku CDI"
         run: |
-          source /etc/bash.bashrc
-          cd game_build
-          
-          echo "Konwersja ELF na BIN..."
-          $KOS_OBJCOPY -R .stack -O binary my_game.elf main.bin
-          
-          echo "Scramble szyfrowanie bootsectora..."
+          source /opt/toolchains/dc/kos/kos/environ.sh
+          sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
           scramble main.bin 1ST_READ.BIN
           
-          echo "Tworzenie IP.BIN Logo startowe..."
           echo "Hardware ID   : SEGA SEGAKATANA" > ip.txt
           echo "Maker ID      : SEGA ENTERPRISES" >> ip.txt
           echo "Device Info   : 0x0000 GD-ROM1/1 0000000000000000" >> ip.txt
@@ -80,16 +46,13 @@ jobs:
           echo "Boot Filename : 1ST_READ.BIN" >> ip.txt
           echo "SW Maker Name : GITHUB" >> ip.txt
           echo "Game Title    : GTA SA DC" >> ip.txt
+          
           makeip ip.txt IP.BIN
-          
-          echo "Tworzenie obrazu ISO..."
           genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
-          
-          echo "Konwersja ISO na finalny plik CDI..."
           cdi4dc game.iso MojaGra_GTA.cdi -d
 
-      - name: "Zapisanie pliku .cdi do pobrania Artifact"
+      - name: "Zapisanie pliku .cdi"
         uses: actions/upload-artifact@v4
         with:
-          name: GTA-SA-CDI-Final
-          path: game_build/MojaGra_GTA.cdi
+          name: GTA-SA-CDI
+          path: GTASA.cdi
