@@ -1,125 +1,121 @@
 #include <kos.h>
 #include <dc/maple.h>
 #include <dc/maple/controller.h>
-#include <dc/kgl.h>
+#include <dc/video.h>
 #include <math.h>
+#include <string.h>
 
-#define M_PI 3.14159265358979323846
+uint16 *vram;
+#define W 640
+#define H 480
 
-void draw_box(float x, float y, float z, float w, float h, float d) {
-    glBegin(GL_QUADS);
-    glVertex3f(x, y, z+d); glVertex3f(x+w, y, z+d); glVertex3f(x+w, y+h, z+d); glVertex3f(x, y+h, z+d);
-    glVertex3f(x, y, z); glVertex3f(x, y+h, z); glVertex3f(x+w, y+h, z); glVertex3f(x+w, y, z);
-    glVertex3f(x, y, z); glVertex3f(x, y, z+d); glVertex3f(x, y+h, z+d); glVertex3f(x, y+h, z);
-    glVertex3f(x+w, y, z); glVertex3f(x+w, y+h, z); glVertex3f(x+w, y+h, z+d); glVertex3f(x+w, y, z+d);
-    glVertex3f(x, y+h, z); glVertex3f(x, y+h, z+d); glVertex3f(x+w, y+h, z+d); glVertex3f(x+w, y+h, z);
-    glVertex3f(x, y, z); glVertex3f(x+w, y, z); glVertex3f(x+w, y, z+d); glVertex3f(x, y, z+d);
-    glEnd();
+// Silnik rysowania linii (Algorytm Bresenhama)
+void draw_line(int x1, int y1, int x2, int y2, uint16 color) {
+    int dx = abs(x2-x1), sx = x1<x2 ? 1 : -1;
+    int dy = -abs(y2-y1), sy = y1<y2 ? 1 : -1; 
+    int err = dx+dy, e2;
+    while(1) {
+        if(x1 >= 0 && x1 < W && y1 >= 0 && y1 < H) vram[y1 * W + x1] = color;
+        if (x1==x2 && y1==y2) break;
+        e2 = 2*err;
+        if (e2 > dy) { err += dy; x1 += sx; }
+        else if (e2 < dx) { err += dx; y1 += sy; }
+    }
+}
+
+// Silnik 3D: Projekcja i rysowanie pudelka
+void draw_box_3d(float x, float y, float z, float w, float h, float d, float cx, float cy, float cz, float cyaw, uint16 col) {
+    float vertices[8][3] = {
+        {x, y, z}, {x+w, y, z}, {x+w, y+h, z}, {x, y+h, z},
+        {x, y, z+d}, {x+w, y, z+d}, {x+w, y+h, z+d}, {x, y+h, z+d}
+    };
+    int edges[12][2] = {
+        {0,1},{1,2},{2,3},{3,0}, {4,5},{5,6},{6,7},{7,4}, {0,4},{1,5},{2,6},{3,7}
+    };
+    float cos_y = cos(cyaw), sin_y = sin(cyaw);
+    int sx[8], sy[8], valid[8];
+    
+    for(int i=0; i<8; i++) {
+        float rx = (vertices[i][0] - cx) * cos_y - (vertices[i][2] - cz) * sin_y;
+        float rz = (vertices[i][0] - cx) * sin_y + (vertices[i][2] - cz) * cos_y;
+        float ry = vertices[i][1] - cy;
+        if(rz < 1.0) { valid[i] = 0; continue; } // Clipping
+        valid[i] = 1;
+        sx[i] = (rx * 400.0 / rz) + W/2;
+        sy[i] = (ry * 400.0 / rz) + H/2;
+    }
+    for(int i=0; i<12; i++) {
+        if(valid[edges[i][0]] && valid[edges[i][1]]) {
+            draw_line(sx[edges[i][0]], sy[edges[i][0]], sx[edges[i][1]], sy[edges[i][1]], col);
+        }
+    }
+}
+
+// Silnik 3D: Rysowanie podlogi (siatki)
+void draw_floor(float cx, float cy, float cz, float cyaw, uint16 col) {
+    float cos_y = cos(cyaw), sin_y = sin(cyaw);
+    int step = 10, range = 100;
+    for(int i=-range; i<=range; i+=step) {
+        float x1 = i, z1 = -range, x2 = i, z2 = range;
+        float rx1 = (x1 - cx) * cos_y - (z1 - cz) * sin_y;
+        float rz1 = (x1 - cx) * sin_y + (z1 - cz) * cos_y;
+        float rx2 = (x2 - cx) * cos_y - (z2 - cz) * sin_y;
+        float rz2 = (x2 - cx) * sin_y + (z2 - cz) * cos_y;
+        if(rz1 > 1.0 && rz2 > 1.0) {
+            draw_line((rx1*400.0/rz1)+W/2, ((0-cy)*400.0/rz1)+H/2, (rx2*400.0/rz2)+W/2, ((0-cy)*400.0/rz2)+H/2, col);
+        }
+        x1 = -range; z1 = i; x2 = range; z2 = i;
+        rx1 = (x1 - cx) * cos_y - (z1 - cz) * sin_y;
+        rz1 = (x1 - cx) * sin_y + (z1 - cz) * cos_y;
+        rx2 = (x2 - cx) * cos_y - (z2 - cz) * sin_y;
+        rz2 = (x2 - cx) * sin_y + (z2 - cz) * cos_y;
+        if(rz1 > 1.0 && rz2 > 1.0) {
+            draw_line((rx1*400.0/rz1)+W/2, ((0-cy)*400.0/rz1)+H/2, (rx2*400.0/rz2)+W/2, ((0-cy)*400.0/rz2)+H/2, col);
+        }
+    }
 }
 
 int main(int argc, char **argv) {
-    glKosInit();
-    glClearColor(0.5f, 0.7f, 1.0f, 1.0f);
-    glEnable(GL_DEPTH_TEST);
+    vram = vram_s; // Bezposredni dostep do pamieci wideo Dreamcasta
     
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    // Ręczne ustawienie perspektywy (odpowiednik gluPerspective, nie wymaga GLU)
-    float fovy = 45.0f * M_PI / 180.0f;
-    float f = 1.0f / tan(fovy / 2.0f);
-    float m[16] = {
-        f / (640.0f/480.0f), 0, 0, 0,
-        0, f, 0, 0,
-        0, 0, (100.0f + 0.1f) / (0.1f - 100.0f), -1.0f,
-        0, 0, (2.0f * 100.0f * 0.1f) / (0.1f - 100.0f), 0
-    };
-    glLoadMatrixf(m);
-    
-    float player_x = 0.0f, player_y = 0.0f, player_z = 0.0f;
-    float player_yaw = 0.0f;
-    float vel_y = 0.0f;
-    int is_on_ground = 1;
-    
-    uint32 secs, msecs;
-    timer_ms_gettime(&secs, &msecs);
-    uint64 last_time = (uint64)secs * 1000 + msecs;
+    float px = 0, py = 0, pz = 0, yaw = 0, vy = 0;
+    int on_ground = 1;
     
     while(1) {
-        timer_ms_gettime(&secs, &msecs);
-        uint64 current_time = (uint64)secs * 1000 + msecs;
-        float dt = (current_time - last_time) / 1000.0f;
-        if(dt > 0.1f) dt = 0.1f;
-        last_time = current_time;
-        
         maple_device_t *cont = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
         if(cont) {
             cont_state_t *state = (cont_state_t *)maple_dev_status(cont);
             if(state) {
                 float lx = (state->joyx - 128) / 128.0f;
                 float ly = (state->joyy - 128) / 128.0f;
+                if(fabs(lx) < 0.2) lx = 0;
+                if(fabs(ly) < 0.2) ly = 0;
                 
-                if(fabs(lx) < 0.2f) lx = 0.0f;
-                if(fabs(ly) < 0.2f) ly = 0.0f;
+                yaw -= lx * 2.0f * 0.016f;
+                px += sin(yaw) * (-ly) * 5.0f * 0.016f;
+                pz += cos(yaw) * (-ly) * 5.0f * 0.016f;
                 
-                player_yaw -= lx * 120.0f * dt;
-                
-                float rad = player_yaw * M_PI / 180.0f;
-                float speed = 5.0f;
-                player_x += sin(rad) * (-ly) * speed * dt;
-                player_z += cos(rad) * (-ly) * speed * dt;
-                
-                if((state->buttons & CONT_X) && is_on_ground) {
-                    vel_y = 8.0f;
-                    is_on_ground = 0;
-                }
-                
-                if((state->buttons & CONT_START) && (state->buttons & CONT_A)) break; 
+                if((state->buttons & CONT_X) && on_ground) { vy = 8.0f; on_ground = 0; }
+                if((state->buttons & CONT_START) && (state->buttons & CONT_A)) break;
             }
         }
         
-        if(!is_on_ground) vel_y -= 20.0f * dt;
-        player_y += vel_y * dt;
-        if(player_y <= 0.0f) {
-            player_y = 0.0f;
-            vel_y = 0.0f;
-            is_on_ground = 1;
-        }
+        if(!on_ground) vy -= 20.0f * 0.016f;
+        py += vy * 0.016f;
+        if(py <= 0) { py = 0; vy = 0; on_ground = 1; }
         
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
+        memset(vram, 0, W * H * 2); // Czyszczenie ekranu (czarny)
         
-        // Kamera TPP (Za plecami gracza)
-        float cam_dist = 8.0f;
-        float cam_height = 4.0f;
-        glTranslatef(0, -cam_height, -cam_dist);
-        glRotatef(-player_yaw, 0, 1, 0);
-        glTranslatef(-player_x, -player_y, -player_z);
+        float cam_x = px - sin(yaw) * 10.0f;
+        float cam_z = pz - cos(yaw) * 10.0f;
+        float cam_y = py + 5.0f;
         
-        // Podloga
-        glColor3f(0.3f, 0.3f, 0.3f);
-        glBegin(GL_QUADS);
-        glVertex3f(-100, 0, -100); glVertex3f(100, 0, -100); 
-        glVertex3f(100, 0, 100); glVertex3f(-100, 0, 100);
-        glEnd();
+        draw_floor(cam_x, cam_y, cam_z, yaw, 0x7BEF); // Szara siatka
+        draw_box_3d(px, py, pz, 1.0, 2.0, 1.0, cam_x, cam_y, cam_z, yaw, 0xFFFF); // Gracz (Bialy)
+        draw_box_3d(-20, 0, 20, 10, 15, 10, cam_x, cam_y, cam_z, yaw, 0xF800); // Budynek (Czerwony)
+        draw_box_3d(15, 0, -30, 12, 25, 12, cam_x, cam_y, cam_z, yaw, 0x07E0); // Budynek (Zielony)
         
-        // Budynki
-        glColor3f(0.6f, 0.5f, 0.4f);
-        draw_box(-20, 0, 20, 10, 15, 10);
-        draw_box(15, 0, -30, 12, 25, 12);
-        draw_box(30, 0, 10, 8, 10, 8);
-        
-        // Gracz (CJ)
-        glPushMatrix();
-        glTranslatef(player_x, player_y, player_z);
-        glRotatef(player_yaw, 0.0f, 1.0f, 0.0f);
-        glColor3f(0.1f, 0.5f, 0.1f); 
-        draw_box(-0.4f, 0.0f, -0.3f, 0.8f, 1.2f, 0.6f);
-        glColor3f(0.8f, 0.6f, 0.4f); 
-        draw_box(-0.25f, 1.2f, -0.25f, 0.5f, 0.5f, 0.5f);
-        glPopMatrix();
-        
-        glKosSwapBuffers();
+        vid_waitvbl();
     }
     return 0;
 }
