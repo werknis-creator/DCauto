@@ -7,37 +7,31 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     
     steps:
       - name: "Pobranie kodu"
         uses: actions/checkout@v4
 
-      - name: "Pobranie GLdc na serwerze"
-        run: |
-          git clone https://github.com/Kazade/GLdc.git
+      - name: "Pobranie GLdc"
+        run: git clone https://github.com/Kazade/GLdc.git
 
-      - name: "Kompilacja GLdc, Gry i tworzenie CDI w Dockerze"
+      - name: "Kompilacja i pakowanie w Dockerze"
         run: |
           docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk /bin/bash -c "
-            set -e # KLUCZOWE: Zatrzymaj skrypt i pokaz blad przy pierwszej pomyłce!
-            source /opt/toolchains/dc/kos/kos/environ.sh
+            set -ex
             cd /src
             
-            echo '=== SPRAWDZANIE CZY PLIKI ISTNIEJA ==='
-            ls -l main.c Makefile
-            
-            echo '=== KOMPILACJA GLdc ==='
+            echo '--- Kompilacja GLdc ---'
             cd GLdc
             make -j4
-            cp libGLdc.a /opt/toolchains/dc/kos/addons/lib/dreamcast/
-            mkdir -p /opt/toolchains/dc/kos/addons/include/GL
-            cp GL/gl.h GL/glu.h GL/glkos.h /opt/toolchains/dc/kos/addons/include/GL/
+            cd ..
             
-            cd /src
-            echo '=== KOMPILACJA GRY ==='
+            echo '--- Kompilacja Gry ---'
             make
             
-            echo '=== TWORZENIE OBRAZU ==='
+            echo '--- Tworzenie obrazu ---'
             sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
             scramble main.bin 1ST_READ.BIN
             
@@ -57,14 +51,16 @@ jobs:
             genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
             cdi4dc game.iso MojaGra_GTA.cdi -d
             
-            chmod 777 MojaGra_GTA.cdi
-            echo '=== PLIK CDI GOTOWY ==='
-            ls -l MojaGra_GTA.cdi
+            echo '--- Poszukiwanie pliku CDI ---'
+            find /src -name '*.cdi'
+            ls -la /src
           "
 
       - name: "Zapisanie pliku .cdi"
         uses: actions/upload-artifact@v4
         with:
           name: GTA-SA-CDI
-          path: MojaGra_GTA.cdi
+          path: |
+            MojaGra_GTA.cdi
+            *.cdi
           if-no-files-found: error
