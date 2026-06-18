@@ -13,72 +13,26 @@ jobs:
       - name: "Pobranie kodu gry z repozytorium"
         uses: actions/checkout@v4
 
-      - name: "Pobranie i przygotowanie Silnika Simulant"
+      - name: "Pobranie Silnika Simulant"
         run: |
           source /etc/bash.bashrc
           echo "Klonowanie silnika Simulant..."
           git clone --recursive https://github.com/Kazade/simulant-engine.git
-          
+
+      - name: "Konfiguracja i Kompilacja Gry oraz Silnika"
+        run: |
+          source /etc/bash.bashrc
           echo "Tworzenie katalogu build..."
-          cd simulant-engine
-          mkdir -p build
-          cd build
-
-      - name: "Konfiguracja CMake dla Dreamcasta"
-        run: |
-          source /etc/bash.bashrc
-          cd simulant-engine/build
-          echo "Uruchamianie CMake..."
-          cmake \
-            -DCMAKE_TOOLCHAIN_FILE=../toolchains/Dreamcast.cmake \
-            -DSIMULANT_BUILD_SAMPLES=OFF \
-            -DSIMULANT_BUILD_TESTS=OFF \
-            -DCMAKE_BUILD_TYPE=Release \
-            ..
-
-      - name: "Kompilacja Silnika Make"
-        run: |
-          source /etc/bash.bashrc
-          cd simulant-engine/build
-          echo "Kompilacja biblioteki libsimulant.a (moze potrwac 10-15 min)..."
-          make -j4
-
-      - name: "FIX Naprawa bledu instalacji sh4zam"
-        run: |
-          echo "Tworzenie brakujacych plikow inline dla sh4zam, aby oszukac CMake..."
-          SH4ZAM_SRC="simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4"
-          mkdir -p $SH4ZAM_SRC
-          
-          touch $SH4ZAM_SRC/shz_complex_sh4.inl.h
-          touch $SH4ZAM_SRC/shz_trig_sh4.inl.h
-          touch $SH4ZAM_SRC/shz_mem_sh4.inl.h
-          touch $SH4ZAM_SRC/shz_quat_sh4.inl.h
-          touch $SH4ZAM_SRC/shz_matrix_sh4.inl.h
-          touch $SH4ZAM_SRC/shz_vector_sh4.inl.h
-          touch $SH4ZAM_SRC/shz_scalar_sh4.inl.h
-          touch $SH4ZAM_SRC/shz_xmtrx_sh4.inl.h
-          
-          echo "Pliki naprawcze utworzone."
-
-      - name: "Instalacja Silnika do Toolchaina"
-        run: |
-          source /etc/bash.bashrc
-          cd simulant-engine/build
-          echo "Instalacja naglowkow i bibliotek do /opt/toolchains/dc/kos..."
-          make install
-
-      - name: "Budowa Gry GTA SA CMake i Make"
-        run: |
-          source /etc/bash.bashrc
-          echo "Budowa wlasciwej gry..."
           mkdir -p game_build
           cd game_build
           
+          echo "Uruchamianie CMake..."
           cmake \
             -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/simulant-engine/toolchains/Dreamcast.cmake \
             -DCMAKE_BUILD_TYPE=Release \
             ..
             
+          echo "Kompilacja (Silnik + Gra)..."
           make -j4
 
       - name: "Pakowanie do formatu CDI Obraz plyty"
