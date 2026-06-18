@@ -1,44 +1,30 @@
-name: GTA SA DC (Rentgen Serwera)
-
+name: Kompilacja Gry Dreamcast
 on:
   push:
     branches: [ "main" ]
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Pobranie kodu
         uses: actions/checkout@v4
-
-      - name: Kompilacja w Dockerze
+      - name: Kompilacja ELF
+        run: docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk make
+      - name: Tworzenie BIN
+        run: docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
+      - name: IP.BIN
         run: |
-          docker run --rm -v ${{ github.workspace }}:/src -w /src nold360/kallistios-sdk /bin/bash -c "
-            set -ex # Wypisuj kazda komende i przerywaj przy bledzie!
-            ls -la
-            make
-            sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
-            scramble main.bin 1ST_READ.BIN
-            cp /opt/mksdiso/src/makeip/ip.txt .
-            makeip ip.txt IP.BIN
-            genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso 1ST_READ.BIN
-            cdi4dc mygame.iso MojaGra_GTA.cdi -d
-            ls -la
-          "
-
-      - name: Debug - Rentgen i naprawa uprawnien na Host
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cp /opt/mksdiso/src/makeip/ip.txt /opt/mksdiso/src/makeip/IP.TMPL /src
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk makeip ip.txt IP.BIN
+      - name: ISO
         run: |
-          echo "=== Lista plikow przed naprawa ==="
-          sudo ls -la ${{ github.workspace }}
-          echo "=== Nadawanie pelnych uprawnien ==="
-          sudo chmod -R 777 ${{ github.workspace }}
-          echo "=== Ostateczna lista plikow ==="
-          sudo find ${{ github.workspace }} -type f
-
-      - name: Zapisanie WSZYSTKIEGO (Artifacts)
+          mkdir -p ${{ github.workspace }}/iso
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk scramble main.bin iso/1ST_READ.BIN
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso iso
+      - name: CDI
+        run: docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cdi4dc mygame.iso MojaGra.cdi -d
+      - name: Zapisz Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Dreamcast-Build
-          path: .
-          if-no-files-found: error
+          name: Dreamcast-CDI
+          path: MojaGra.cdi
