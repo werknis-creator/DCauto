@@ -27,11 +27,8 @@ jobs:
           cd game_build
           
           echo "Uruchamianie CMake..."
-          cmake \
-            -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/simulant-engine/toolchains/Dreamcast.cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            ..
-            
+          cmake -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/simulant-engine/toolchains/Dreamcast.cmake -DCMAKE_BUILD_TYPE=Release $GITHUB_WORKSPACE
+          
           echo "Kompilacja (Silnik + Gra)..."
           make -j4
 
