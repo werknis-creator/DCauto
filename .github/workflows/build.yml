@@ -8,6 +8,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: nold360/kallistios-sdk
+    # Dodajemy zmienną środowiskową, aby wymusić Node 20 (Node 24 nie działa na starym kontenerze)
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     
     steps:
       - name: "Pobranie kodu"
@@ -55,4 +58,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: GTA-SA-CDI
-          path: GTASA.cdi
+          path: MojaGra_GTA.cdi
