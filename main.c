@@ -1,8 +1,7 @@
 #include <kos.h>
 #include <dc/maple.h>
 #include <dc/maple/controller.h>
-#include <GL/gl.h>
-#include <GL/glkos.h>
+#include <dc/kgl.h>
 #include <math.h>
 
 #define PI 3.14159265f
@@ -58,57 +57,4 @@ int main(int argc, char **argv) {
                 yaw -= lx * 2.5f * 0.016f; 
                 
                 float speed = 6.0f;
-                px += sinf(yaw) * (-ly) * speed * 0.016f;
-                pz += cosf(yaw) * (-ly) * speed * 0.016f;
-                
-                if((state->buttons & CONT_X) && on_ground) {
-                    vy = 8.0f;
-                    on_ground = 0;
-                }
-                
-                if((state->buttons & CONT_START) && (state->buttons & CONT_A)) break;
-            }
-        }
-        
-        if(!on_ground) vy -= 20.0f * 0.016f; 
-        py += vy * 0.016f;
-        if(py <= 0.0f) {
-            py = 0.0f;
-            vy = 0.0f;
-            on_ground = 1;
-        }
-        
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-        
-        float cam_dist = 8.0f;
-        float cam_height = 4.0f;
-        
-        glTranslatef(0.0f, -cam_height, -cam_dist);
-        glRotatef(-yaw * 180.0f / PI, 0.0f, 1.0f, 0.0f);
-        glTranslatef(-px, -py, -pz);
-        
-        glColor3f(0.3f, 0.3f, 0.3f);
-        glBegin(GL_QUADS);
-        glVertex3f(-100.0f, 0.0f, -100.0f);
-        glVertex3f( 100.0f, 0.0f, -100.0f);
-        glVertex3f( 100.0f, 0.0f,  100.0f);
-        glVertex3f(-100.0f, 0.0f,  100.0f);
-        glEnd();
-        
-        draw_box(-20.0f, 0.0f,  20.0f, 10.0f, 15.0f, 10.0f, 0.8f, 0.2f, 0.2f);
-        draw_box( 15.0f, 0.0f, -30.0f, 12.0f, 25.0f, 12.0f, 0.2f, 0.8f, 0.2f);
-        draw_box( 30.0f, 0.0f,  10.0f,  8.0f, 10.0f,  8.0f, 0.2f, 0.2f, 0.8f);
-        
-        glPushMatrix();
-        glTranslatef(px, py, pz);
-        glRotatef(yaw * 180.0f / PI, 0.0f, 1.0f, 0.0f);
-        draw_box(-0.4f, 0.0f, -0.3f, 0.8f, 1.2f, 0.6f, 0.1f, 0.5f, 0.1f);
-        draw_box(-0.25f, 1.2f, -0.25f, 0.5f, 0.5f, 0.5f, 0.8f, 0.6f, 0.4f);
-        glPopMatrix();
-        
-        glKosSwapBuffers();
-    }
-    return 0;
-}
+                px += sinf
