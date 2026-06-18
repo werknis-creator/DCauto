@@ -1,4 +1,4 @@
-name: GTA SA DC (Rentgen)
+name: GTA SA DC (Ostateczny Cios)
 
 on:
   push:
@@ -11,27 +11,31 @@ jobs:
       - name: Pobranie kodu
         uses: actions/checkout@v4
 
-      - name: Kompilacja i Pakowanie (X-Ray)
+      - name: 1. Sprawdzenie plikow na Host
+        run: ls -la
+
+      - name: 2. Kompilacja w Dockerze
         run: |
           docker run --rm -v ${{ github.workspace }}:/src -w /src nold360/kallistios-sdk /bin/bash -c "
-            set -e # Zatrzymaj i pokaz blad przy pierwszej pomyłce!
-            echo '=== KROK 1: KOMPILACJA C ==='
+            set -e
             make
-            echo '=== KROK 2: TWORZENIE BIN ==='
             sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
-            echo '=== KROK 3: SCRAMBLE ==='
             scramble main.bin 1ST_READ.BIN
-            echo '=== KROK 4: IP.BIN ==='
             cp /opt/mksdiso/src/makeip/ip.txt .
             makeip ip.txt IP.BIN
-            echo '=== KROK 5: ISO I CDI ==='
             genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso 1ST_READ.BIN
             cdi4dc mygame.iso MojaGra.cdi -d
-            ls -lh MojaGra.cdi
+            chmod 777 *
           "
 
-      - name: Zapisz Artifact
+      - name: 3. Zabicie Roota (Naprawa uprawnien na Host)
+        run: |
+          sudo chmod -R 777 ${{ github.workspace }}
+          echo "=== Pliki po naprawie ==="
+          ls -la
+
+      - name: 4. Pobranie WSZYSTKIEGO (Artifacts)
         uses: actions/upload-artifact@v4
         with:
-          name: Dreamcast-CDI
-          path: MojaGra.cdi
+          name: Dreamcast-Full-ZIP
+          path: .
