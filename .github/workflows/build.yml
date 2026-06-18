@@ -1,6 +1,9 @@
-name: Dreamcast 3D Ekstraktor
+name: Dreamcast 3D Ghostwriter
 
 on: [push]
+
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
   build:
@@ -8,22 +11,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Uruchomienie skryptu w Dockerze
+      - name: Generowanie skryptu i kompilacja
         run: |
+          cat << 'SCRIPT_EOF' > build.sh
+          #!/bin/bash
+          set -ex
+          
+          # Generowanie Makefile z gwarantowanymi TABULATORAMI (\t)
+          printf "TARGET = my_game.elf\nOBJS = main.o\n\nall: rm-elf \$(TARGET)\n\ninclude \$(KOS_BASE)/Makefile.rules\n\nrm-elf:\n\trm -f \$(TARGET)\n\n\$(TARGET): \$(OBJS)\n\t\$(KOS_CC) \$(KOS_CFLAGS) \$(KOS_LDFLAGS) -o \$@ \$(KOS_START) \$^ \$(KOS_LIBS) -lm -lKGL -lGL\n\nclean:\n\trm -f \$(TARGET) \$(OBJS) romdisk.*\n" > Makefile
+
+          . /opt/toolchains/dc/kos/kos/environ.sh || true
+          make
+          
+          sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
+          scramble main.bin 1ST_READ.BIN
+          
+          echo "Hardware ID   : SEGA SEGAKATANA" > ip.txt
+          echo "Maker ID      : SEGA ENTERPRISES" >> ip.txt
+          echo "Device Info   : 0x0000 GD-ROM1/1" >> ip.txt
+          echo "Area Symbols  : 0x00000000" >> ip.txt
+          echo "Peripherals   : 0x00000000" >> ip.txt
+          echo "Product Number: 0000000000000000" >> ip.txt
+          echo "Version       : V1.000" >> ip.txt
+          echo "Release Date  : 20230101" >> ip.txt
+          echo "Boot Filename : 1ST_READ.BIN" >> ip.txt
+          echo "SW Maker Name : GITHUB" >> ip.txt
+          echo "Game Title    : GTA SA DC" >> ip.txt
+          
+          makeip ip.txt IP.BIN
+          genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso 1ST_READ.BIN
+          cdi4dc mygame.iso MojaGra_GTA.cdi -d
+          SCRIPT_EOF
+          
           chmod +x build.sh
-          # Uruchamiamy kontener, ale NIE usuwamy go od razu (--name dcbuild)
           docker run --name dcbuild -v ${{ github.workspace }}:/src -w /src nold360/kallistios-sdk ./build.sh
-          
-      - name: Ekstrakcja CDI (Ominięcie pułapki Roota)
+
+      - name: Ekstrakcja i Sprzatanie
+        if: always()
         run: |
-          # Kopiujemy plik z kontenera na host. To automatycznie naprawia uprawnienia Linuxa!
-          docker cp dcbuild:/src/MojaGra_GTA.cdi ${{ github.workspace }}/MojaGra_GTA.cdi
-          docker rm dcbuild
-          ls -la ${{ github.workspace }}
-          
-      - name: Upload Prawdziwego CDI
+          docker cp dcbuild:/src/MojaGra_GTA.cdi ${{ github.workspace }}/MojaGra_GTA.cdi || true
+          docker rm dcbuild || true
+          sudo chmod -R 777 ${{ github.workspace }}
+          ls -la
+
+      - name: Upload CDI
         uses: actions/upload-artifact@v4
         with:
           name: Dreamcast-GTA-3D
-          path: MojaGra_GTA.cdi
-          if-no-files-found: error
+          path: |
+            MojaGra_GTA.cdi
+            *.cdi
+          if-no-files-found: warn
