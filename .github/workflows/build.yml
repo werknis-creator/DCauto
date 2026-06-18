@@ -1,4 +1,4 @@
-name: GTA SA DC (Pancerny Zestaw)
+name: GTA SA DC (Rentgen Serwera)
 
 on:
   push:
@@ -12,42 +12,33 @@ jobs:
       - name: Pobranie kodu
         uses: actions/checkout@v4
 
-      - name: Kompilacja i Pakowanie w Dockerze
+      - name: Kompilacja w Dockerze
         run: |
-          # Uruchamiamy Docker z set -e, aby jakikolwiek blad C przerwal skrypt i pokazal prawde
           docker run --rm -v ${{ github.workspace }}:/src -w /src nold360/kallistios-sdk /bin/bash -c "
-            set -e
-            
-            echo '--- KROK 1: KOMPILACJA C ---'
+            set -ex # Wypisuj kazda komende i przerywaj przy bledzie!
+            ls -la
             make
-            
-            echo '--- KROK 2: TWORZENIE BIN ---'
             sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
-            
-            echo '--- KROK 3: SCRAMBLE ---'
             scramble main.bin 1ST_READ.BIN
-            
-            echo '--- KROK 4: IP.BIN ---'
             cp /opt/mksdiso/src/makeip/ip.txt .
             makeip ip.txt IP.BIN
-            
-            echo '--- KROK 5: ISO I CDI ---'
             genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso 1ST_READ.BIN
             cdi4dc mygame.iso MojaGra_GTA.cdi -d
-            
-            echo '--- NADAWANIE UPRAWNIEN ---'
-            chmod 777 MojaGra_GTA.cdi
-            ls -la MojaGra_GTA.cdi
+            ls -la
           "
 
-      - name: Zapisanie plikow (Artifacts)
+      - name: Debug - Rentgen i naprawa uprawnien na Host
+        run: |
+          echo "=== Lista plikow przed naprawa ==="
+          sudo ls -la ${{ github.workspace }}
+          echo "=== Nadawanie pelnych uprawnien ==="
+          sudo chmod -R 777 ${{ github.workspace }}
+          echo "=== Ostateczna lista plikow ==="
+          sudo find ${{ github.workspace }} -type f
+
+      - name: Zapisanie WSZYSTKIEGO (Artifacts)
         uses: actions/upload-artifact@v4
         with:
           name: Dreamcast-Build
-          # Pobieramy wszystko co moglo powstac, na wypadek gdyby sciezka byla inna
-          path: |
-            **/*.cdi
-            **/*.iso
-            **/*.elf
-            **/*.bin
-          if-no-files-found: warn
+          path: .
+          if-no-files-found: error
