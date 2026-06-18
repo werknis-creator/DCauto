@@ -18,12 +18,15 @@ jobs:
 
       - name: "Kompilacja GLdc, Gry i tworzenie CDI w Dockerze"
         run: |
-          # Dodano -u $(id -u):$(id -g), aby pliki nie byly tworzone jako 'root'
           docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk /bin/bash -c "
+            set -e # KLUCZOWE: Zatrzymaj skrypt i pokaz blad przy pierwszej pomyłce!
             source /opt/toolchains/dc/kos/kos/environ.sh
             cd /src
             
-            echo 'Kompilacja GLdc...'
+            echo '=== SPRAWDZANIE CZY PLIKI ISTNIEJA ==='
+            ls -l main.c Makefile
+            
+            echo '=== KOMPILACJA GLdc ==='
             cd GLdc
             make -j4
             cp libGLdc.a /opt/toolchains/dc/kos/addons/lib/dreamcast/
@@ -31,10 +34,10 @@ jobs:
             cp GL/gl.h GL/glu.h GL/glkos.h /opt/toolchains/dc/kos/addons/include/GL/
             
             cd /src
-            echo 'Kompilacja Gry...'
+            echo '=== KOMPILACJA GRY ==='
             make
             
-            echo 'Tworzenie obrazu plyty...'
+            echo '=== TWORZENIE OBRAZU ==='
             sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
             scramble main.bin 1ST_READ.BIN
             
@@ -54,11 +57,9 @@ jobs:
             genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
             cdi4dc game.iso MojaGra_GTA.cdi -d
             
-            echo 'Nadawanie pelnych uprawnien dla GitHuba...'
-            chmod -R 777 /src
-            
-            echo 'Sprawdzenie czy plik napewno istnieje:'
-            ls -l /src/MojaGra_GTA.cdi
+            chmod 777 MojaGra_GTA.cdi
+            echo '=== PLIK CDI GOTOWY ==='
+            ls -l MojaGra_GTA.cdi
           "
 
       - name: "Zapisanie pliku .cdi"
@@ -66,3 +67,4 @@ jobs:
         with:
           name: GTA-SA-CDI
           path: MojaGra_GTA.cdi
+          if-no-files-found: error
