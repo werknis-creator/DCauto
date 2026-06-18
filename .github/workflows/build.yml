@@ -1,43 +1,53 @@
-name: Kompilacja Gry Dreamcast
+name: GTA SA DC (Simulant)
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
     branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: kazade/dreamcast-sdk
+    
     steps:
-      - name: Pobranie kodu z repozytorium
+      - name: Pobranie kodu
         uses: actions/checkout@v4
 
-      - name: Kompilacja pliku ELF (KallistiOS)
+      - name: Instalacja zaleznosci i budowa Silnika Simulant
         run: |
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk make
+          source /etc/bash.bashrc
+          git clone --recursive https://github.com/Kazade/simulant-engine.git
+          cd simulant-engine
+          mkdir build && cd build
+          # Kompilacja silnika dla procesora SH4 Dreamcasta
+          cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/Dreamcast.cmake -DSIMULANT_BUILD_SAMPLES=OFF -DSIMULANT_BUILD_TESTS=OFF ..
+          make -j4
+          make install
 
-      - name: Tworzenie pliku main.bin
+      - name: Budowa Gry
         run: |
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
+          source /etc/bash.bashrc
+          mkdir build && cd build
+          cmake -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/simulant-engine/toolchains/Dreamcast.cmake ..
+          make -j4
 
-      - name: Tworzenie IP.BIN (bootsector)
+      - name: Tworzenie pliku CDI (Obraz plyty)
         run: |
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cp /opt/mksdiso/src/makeip/ip.txt /opt/mksdiso/src/makeip/IP.TMPL /src
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk makeip ip.txt IP.BIN
+          source /etc/bash.bashrc
+          cd build
+          # Konwersja ELF na BIN i tworzenie bootsectora
+          $KOS_OBJCOPY -R .stack -O binary my_game.elf main.bin
+          scramble main.bin 1ST_READ.BIN
+          
+          # Tworzenie IP.BIN (logo startowe)
+          makeip ip.txt IP.BIN -t "GTA SA DC"
+          
+          # Tworzenie ISO i konwersja na CDI
+          genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
+          cdi4dc game.iso MojaGra_GTA.cdi -d
 
-      - name: Scramble i tworzenie obrazu ISO
-        run: |
-          mkdir -p ${{ github.workspace }}/iso
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk scramble main.bin iso/1ST_READ.BIN
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso iso
-
-      - name: Konwersja na finalny plik CDI
-        run: |
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cdi4dc mygame.iso MojaGra.cdi -d
-
-      - name: Zapisanie pliku .cdi do pobrania (Artifact)
+      - name: Zapisanie pliku .cdi do pobrania
         uses: actions/upload-artifact@v4
         with:
-          name: Dreamcast-CDI
-          path: MojaGra.cdi
+          name: GTA-SA-CDI
+          path: build/MojaGra_GTA.cdi
