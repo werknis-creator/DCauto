@@ -7,7 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # NIE UŻYWAMY TUTAJ 'container:', aby uniknąć błędów GLIBC z Node.js
     
     steps:
       - name: "Pobranie kodu"
@@ -19,7 +18,8 @@ jobs:
 
       - name: "Kompilacja GLdc, Gry i tworzenie CDI w Dockerze"
         run: |
-          docker run --rm -v ${{ github.workspace }}:/src nold360/kallistios-sdk /bin/bash -c "
+          # Dodano -u $(id -u):$(id -g), aby pliki nie byly tworzone jako 'root'
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk /bin/bash -c "
             source /opt/toolchains/dc/kos/kos/environ.sh
             cd /src
             
@@ -53,6 +53,12 @@ jobs:
             makeip ip.txt IP.BIN
             genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
             cdi4dc game.iso MojaGra_GTA.cdi -d
+            
+            echo 'Nadawanie pelnych uprawnien dla GitHuba...'
+            chmod -R 777 /src
+            
+            echo 'Sprawdzenie czy plik napewno istnieje:'
+            ls -l /src/MojaGra_GTA.cdi
           "
 
       - name: "Zapisanie pliku .cdi"
