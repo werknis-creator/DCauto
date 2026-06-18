@@ -18,30 +18,46 @@ jobs:
           source /etc/bash.bashrc
           echo "Klonowanie silnika Simulant..."
           git clone --recursive https://github.com/Kazade/simulant-engine.git
+          
+          echo "Tworzenie brakujacych folderow, aby oszukac CMake..."
+          mkdir -p simulant-engine/assets
 
-      - name: "Generowanie pliku CMakeLists.txt w chmurze"
-        run: |
-          echo "Tworzenie pliku CMakeLists.txt automatycznie..."
-          echo "cmake_minimum_required(VERSION 3.10)" > CMakeLists.txt
-          echo "project(GTASA_DC CXX)" >> CMakeLists.txt
-          echo "set(CMAKE_CXX_STANDARD 11)" >> CMakeLists.txt
-          echo "add_subdirectory(simulant-engine)" >> CMakeLists.txt
-          echo "add_executable(my_game.elf main.cpp)" >> CMakeLists.txt
-          echo "target_link_libraries(my_game.elf PRIVATE simulant)" >> CMakeLists.txt
-          echo "target_include_directories(my_game.elf PRIVATE \${CMAKE_CURRENT_SOURCE_DIR}/simulant-engine/simulant/include)" >> CMakeLists.txt
-          echo "Plik CMakeLists.txt zostal stworzony!"
-
-      - name: "Konfiguracja i Kompilacja Gry oraz Silnika"
+      - name: "Kompilacja i Instalacja Silnika Simulant"
         run: |
           source /etc/bash.bashrc
-          echo "Tworzenie katalogu build..."
+          echo "Wchodze do folderu silnika, aby CMAKE_SOURCE_DIR bylo poprawne..."
+          cd simulant-engine
+          mkdir build && cd build
+          
+          echo "Konfiguracja CMake..."
+          cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/Dreamcast.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install ..
+          
+          echo "Kompilacja silnika (to potrwa ok. 10 min)..."
+          make -j4
+          
+          echo "Instalacja silnika do folderu install..."
+          make install
+
+      - name: "Budowa Wlasciwej Gry"
+        run: |
+          source /etc/bash.bashrc
+          echo "Tworzenie folderu dla gry..."
           mkdir -p game_build
           cd game_build
           
-          echo "Uruchamianie CMake..."
-          cmake -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/simulant-engine/toolchains/Dreamcast.cmake -DCMAKE_BUILD_TYPE=Release $GITHUB_WORKSPACE
+          echo "Generowanie CMakeLists.txt dla gry..."
+          echo "cmake_minimum_required(VERSION 3.10)" > CMakeLists.txt
+          echo "project(GTASA_DC CXX)" >> CMakeLists.txt
+          echo "set(CMAKE_CXX_STANDARD 11)" >> CMakeLists.txt
+          echo "set(CMAKE_PREFIX_PATH $GITHUB_WORKSPACE/install)" >> CMakeLists.txt
+          echo "find_package(simulant REQUIRED)" >> CMakeLists.txt
+          echo "add_executable(my_game.elf $GITHUB_WORKSPACE/main.cpp)" >> CMakeLists.txt
+          echo "target_link_libraries(my_game.elf PRIVATE simulant)" >> CMakeLists.txt
           
-          echo "Kompilacja (Silnik + Gra)..."
+          echo "Uruchamianie CMake dla gry..."
+          cmake -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/simulant-engine/toolchains/Dreamcast.cmake -DCMAKE_BUILD_TYPE=Release .
+          
+          echo "Kompilacja gry..."
           make -j4
 
       - name: "Pakowanie do formatu CDI Obraz plyty"
@@ -78,5 +94,5 @@ jobs:
       - name: "Zapisanie pliku .cdi do pobrania Artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: GTA-SA-CDI-Fixed
+          name: GTA-SA-CDI-Final
           path: game_build/MojaGra_GTA.cdi
