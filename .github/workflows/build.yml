@@ -1,41 +1,47 @@
-name: GTA SA DC (Ostateczny Cios)
+name: Dreamcast 3D Snajper
 
-on:
-  push:
-    branches: [ "main" ]
+on: [push]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Pobranie kodu
-        uses: actions/checkout@v4
-
-      - name: 1. Sprawdzenie plikow na Host
-        run: ls -la
-
-      - name: 2. Kompilacja w Dockerze
+      - uses: actions/checkout@v4
+      
+      - name: Kompilacja Bezposrednia i Pakowanie
         run: |
           docker run --rm -v ${{ github.workspace }}:/src -w /src nold360/kallistios-sdk /bin/bash -c "
-            set -e
-            make
+            set -ex
+            # KOMPILACJA BEZ MAKEFILE! Ominelismy pulapke spacji GitHuba.
+            kos-cc -O2 -o my_game.elf main.c -lm -lGL
+            
             sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
             scramble main.bin 1ST_READ.BIN
-            cp /opt/mksdiso/src/makeip/ip.txt .
+            
+            echo 'Hardware ID   : SEGA SEGAKATANA' > ip.txt
+            echo 'Maker ID      : SEGA ENTERPRISES' >> ip.txt
+            echo 'Device Info   : 0x0000 GD-ROM1/1' >> ip.txt
+            echo 'Area Symbols  : 0x00000000' >> ip.txt
+            echo 'Peripherals   : 0x00000000' >> ip.txt
+            echo 'Product Number: 0000000000000000' >> ip.txt
+            echo 'Version       : V1.000' >> ip.txt
+            echo 'Release Date  : 20230101' >> ip.txt
+            echo 'Boot Filename : 1ST_READ.BIN' >> ip.txt
+            echo 'SW Maker Name : GITHUB' >> ip.txt
+            echo 'Game Title    : GTA SA DC' >> ip.txt
+            
             makeip ip.txt IP.BIN
             genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso 1ST_READ.BIN
-            cdi4dc mygame.iso MojaGra.cdi -d
-            chmod 777 *
+            cdi4dc mygame.iso MojaGra_GTA.cdi -d
+            chmod 777 MojaGra_GTA.cdi
           "
-
-      - name: 3. Zabicie Roota (Naprawa uprawnien na Host)
-        run: |
-          sudo chmod -R 777 ${{ github.workspace }}
-          echo "=== Pliki po naprawie ==="
-          ls -la
-
-      - name: 4. Pobranie WSZYSTKIEGO (Artifacts)
+          
+      - name: Naprawa Uprawnien Linuxa
+        run: sudo chmod -R 777 ${{ github.workspace }}
+        
+      - name: Upload Prawdziwego CDI
         uses: actions/upload-artifact@v4
         with:
-          name: Dreamcast-Full-ZIP
-          path: .
+          name: GRA-3D-CDI
+          path: MojaGra_GTA.cdi
+          if-no-files-found: error
