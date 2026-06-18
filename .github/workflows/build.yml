@@ -1,28 +1,35 @@
-name: Kompilacja Gry Dreamcast
+name: GTA SA DC (Rentgen)
+
 on:
   push:
     branches: [ "main" ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Pobranie kodu
         uses: actions/checkout@v4
-      - name: Kompilacja ELF
-        run: docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk make
-      - name: Tworzenie BIN
-        run: docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
-      - name: IP.BIN
+
+      - name: Kompilacja i Pakowanie (X-Ray)
         run: |
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cp /opt/mksdiso/src/makeip/ip.txt /opt/mksdiso/src/makeip/IP.TMPL /src
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk makeip ip.txt IP.BIN
-      - name: ISO
-        run: |
-          mkdir -p ${{ github.workspace }}/iso
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk scramble main.bin iso/1ST_READ.BIN
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso iso
-      - name: CDI
-        run: docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cdi4dc mygame.iso MojaGra.cdi -d
+          docker run --rm -v ${{ github.workspace }}:/src -w /src nold360/kallistios-sdk /bin/bash -c "
+            set -e # Zatrzymaj i pokaz blad przy pierwszej pomyłce!
+            echo '=== KROK 1: KOMPILACJA C ==='
+            make
+            echo '=== KROK 2: TWORZENIE BIN ==='
+            sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
+            echo '=== KROK 3: SCRAMBLE ==='
+            scramble main.bin 1ST_READ.BIN
+            echo '=== KROK 4: IP.BIN ==='
+            cp /opt/mksdiso/src/makeip/ip.txt .
+            makeip ip.txt IP.BIN
+            echo '=== KROK 5: ISO I CDI ==='
+            genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso 1ST_READ.BIN
+            cdi4dc mygame.iso MojaGra.cdi -d
+            ls -lh MojaGra.cdi
+          "
+
       - name: Zapisz Artifact
         uses: actions/upload-artifact@v4
         with:
