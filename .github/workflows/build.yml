@@ -24,12 +24,29 @@ jobs:
           make -j4
           make install
 
-      - name: Budowa Gry
+            - name: Budowa Silnika Simulant
         run: |
           source /etc/bash.bashrc
+          cd simulant-engine
           mkdir build && cd build
-          cmake -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/simulant-engine/toolchains/Dreamcast.cmake ..
+          cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/Dreamcast.cmake -DSIMULANT_BUILD_SAMPLES=OFF -DSIMULANT_BUILD_TESTS=OFF ..
           make -j4
+
+      - name: Fix sh4zam install bug
+        run: |
+          # Tworzymy puste pliki inline sh4zam, ktorych brakuje w repozytorium
+          mkdir -p simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_complex_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_trig_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_mem_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_quat_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_matrix_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_vector_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_scalar_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_xmtrx_sh4.inl.h
+          
+          # Teraz instalacja przejdzie bez bledu "No such file or directory"
+          cd simulant-engine/build && make install
 
       - name: Tworzenie pliku CDI (Obraz plyty)
         run: |
