@@ -9,7 +9,7 @@ rm-elf:
 	rm -f $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $@ $(KOS_START) $^ $(KOS_LIBS) -lGL -lm
+	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $@ $(KOS_START) $^ $(KOS_LIBS) -lm
 
 clean:
 	rm -f $(TARGET) $(OBJS) romdisk.*
