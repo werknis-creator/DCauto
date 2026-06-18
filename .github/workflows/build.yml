@@ -13,52 +13,49 @@ jobs:
       - name: "Pobranie kodu gry z repozytorium"
         uses: actions/checkout@v4
 
-      - name: "Pobranie Silnika Simulant"
+      - name: "Pobranie Silnika Simulant i Fix Brakujacych Plikow"
         run: |
           source /etc/bash.bashrc
           echo "Klonowanie silnika Simulant..."
           git clone --recursive https://github.com/Kazade/simulant-engine.git
           
-          echo "Tworzenie brakujacych folderow, aby oszukac CMake..."
+          echo "Tworzenie brakujacych folderow i plikow, aby oszukac CMake..."
           mkdir -p simulant-engine/assets
+          mkdir -p simulant-engine/cmake_modules
+          touch simulant-engine/cmake_modules/simulant-config.cmake
+          
+          mkdir -p simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_complex_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_trig_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_mem_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_quat_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_matrix_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_vector_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_scalar_sh4.inl.h
+          touch simulant-engine/deps/sh4zam/include/sh4zam/inline/sh4/shz_xmtrx_sh4.inl.h
 
       - name: "Kompilacja i Instalacja Silnika Simulant"
         run: |
           source /etc/bash.bashrc
-          echo "Wchodze do folderu silnika, aby CMAKE_SOURCE_DIR bylo poprawne..."
+          echo "Wchodze do folderu silnika..."
           cd simulant-engine
           mkdir build && cd build
           
           echo "Konfiguracja CMake..."
-          cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/Dreamcast.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install ..
+          cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/Dreamcast.cmake -DCMAKE_BUILD_TYPE=Release ..
           
-          echo "Kompilacja silnika (to potrwa ok. 10 min)..."
+          echo "Kompilacja silnika..."
           make -j4
           
-          echo "Instalacja silnika do folderu install..."
+          echo "Instalacja silnika do toolchaina..."
           make install
 
       - name: "Budowa Wlasciwej Gry"
         run: |
           source /etc/bash.bashrc
-          echo "Tworzenie folderu dla gry..."
           mkdir -p game_build
-          cd game_build
-          
-          echo "Generowanie CMakeLists.txt dla gry..."
-          echo "cmake_minimum_required(VERSION 3.10)" > CMakeLists.txt
-          echo "project(GTASA_DC CXX)" >> CMakeLists.txt
-          echo "set(CMAKE_CXX_STANDARD 11)" >> CMakeLists.txt
-          echo "set(CMAKE_PREFIX_PATH $GITHUB_WORKSPACE/install)" >> CMakeLists.txt
-          echo "find_package(simulant REQUIRED)" >> CMakeLists.txt
-          echo "add_executable(my_game.elf $GITHUB_WORKSPACE/main.cpp)" >> CMakeLists.txt
-          echo "target_link_libraries(my_game.elf PRIVATE simulant)" >> CMakeLists.txt
-          
-          echo "Uruchamianie CMake dla gry..."
-          cmake -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/simulant-engine/toolchains/Dreamcast.cmake -DCMAKE_BUILD_TYPE=Release .
-          
-          echo "Kompilacja gry..."
-          make -j4
+          echo "Kompilacja gry bezposrednio kompilatorem kos-c++..."
+          kos-c++ -O2 -I/opt/toolchains/dc/kos/addons/include -o game_build/my_game.elf $GITHUB_WORKSPACE/main.cpp -L/opt/toolchains/dc/kos/addons/lib/dreamcast -lsimulant -lGLdc -lsh4zam
 
       - name: "Pakowanie do formatu CDI Obraz plyty"
         run: |
