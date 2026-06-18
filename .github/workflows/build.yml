@@ -1,0 +1,43 @@
+name: Kompilacja Gry Dreamcast
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pobranie kodu z repozytorium
+        uses: actions/checkout@v4
+
+      - name: Kompilacja pliku ELF (KallistiOS)
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk make
+
+      - name: Tworzenie pliku main.bin
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
+
+      - name: Tworzenie IP.BIN (bootsector)
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cp /opt/mksdiso/src/makeip/ip.txt /opt/mksdiso/src/makeip/IP.TMPL /src
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk makeip ip.txt IP.BIN
+
+      - name: Scramble i tworzenie obrazu ISO
+        run: |
+          mkdir -p ${{ github.workspace }}/iso
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk scramble main.bin iso/1ST_READ.BIN
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso iso
+
+      - name: Konwersja na finalny plik CDI
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cdi4dc mygame.iso MojaGra.cdi -d
+
+      - name: Zapisanie pliku .cdi do pobrania (Artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dreamcast-CDI
+          path: MojaGra.cdi
