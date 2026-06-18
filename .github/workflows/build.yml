@@ -1,4 +1,4 @@
-name: GTA SA DC (Zloty Klucz)
+name: GTA SA DC (Pancerny Zestaw)
 
 on:
   push:
@@ -7,34 +7,47 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Uruchamiamy CAY JOB wewnatrz kontenera KOS!
-    container: nold360/kallistios-sdk
     
     steps:
-      # Uzywamy @v2 (Node 12), ktory dziala na starym GLIBC w kontenerze KOS
       - name: Pobranie kodu
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Kompilacja i Pakowanie
+      - name: Kompilacja i Pakowanie w Dockerze
         run: |
-          set -e # Zatrzymaj przy bledzie i pokaz prawde!
-          echo "=== Kompilacja ==="
-          make
-          echo "=== Tworzenie BIN ==="
-          sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
-          echo "=== Scramble ==="
-          scramble main.bin 1ST_READ.BIN
-          echo "=== IP.BIN ==="
-          cp /opt/mksdiso/src/makeip/ip.txt /opt/mksdiso/src/makeip/IP.TMPL .
-          makeip ip.txt IP.BIN
-          echo "=== ISO i CDI ==="
-          genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso 1ST_READ.BIN
-          cdi4dc mygame.iso MojaGra_GTA.cdi -d
-          ls -la MojaGra_GTA.cdi
+          # Uruchamiamy Docker z set -e, aby jakikolwiek blad C przerwal skrypt i pokazal prawde
+          docker run --rm -v ${{ github.workspace }}:/src -w /src nold360/kallistios-sdk /bin/bash -c "
+            set -e
+            
+            echo '--- KROK 1: KOMPILACJA C ---'
+            make
+            
+            echo '--- KROK 2: TWORZENIE BIN ---'
+            sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
+            
+            echo '--- KROK 3: SCRAMBLE ---'
+            scramble main.bin 1ST_READ.BIN
+            
+            echo '--- KROK 4: IP.BIN ---'
+            cp /opt/mksdiso/src/makeip/ip.txt .
+            makeip ip.txt IP.BIN
+            
+            echo '--- KROK 5: ISO I CDI ---'
+            genisoimage -V MOJA_GRA -G IP.BIN -joliet -rock -l -o mygame.iso 1ST_READ.BIN
+            cdi4dc mygame.iso MojaGra_GTA.cdi -d
+            
+            echo '--- NADAWANIE UPRAWNIEN ---'
+            chmod 777 MojaGra_GTA.cdi
+            ls -la MojaGra_GTA.cdi
+          "
 
-      # Uzywamy @v2 (Node 12), ktory bez problemu odczyta plik
-      - name: Zapisanie pliku
-        uses: actions/upload-artifact@v2
+      - name: Zapisanie plikow (Artifacts)
+        uses: actions/upload-artifact@v4
         with:
-          name: Dreamcast-CDI
-          path: MojaGra_GTA.cdi
+          name: Dreamcast-Build
+          # Pobieramy wszystko co moglo powstac, na wypadek gdyby sciezka byla inna
+          path: |
+            **/*.cdi
+            **/*.iso
+            **/*.elf
+            **/*.bin
+          if-no-files-found: warn
