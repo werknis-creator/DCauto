@@ -1,10 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
-project(GTASA_DC)
+project(GTASA_DC CXX)
 
 set(CMAKE_CXX_STANDARD 11)
 
-# Dodaj plik zrodlowy
+# Dodajemy silnik Simulant bezposrednio z zrodel
+add_subdirectory(simulant-engine)
+
 add_executable(my_game.elf main.cpp)
 
 # Dolacz biblioteke Simulant
 target_link_libraries(my_game.elf PRIVATE simulant)
+
+# Upewnij sie, ze kompilator widzi pliki naglowkowe silnika
+target_include_directories(my_game.elf PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/simulant-engine/simulant/include
+)
