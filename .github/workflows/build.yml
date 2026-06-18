@@ -1,4 +1,4 @@
-name: GTA SA DC KGL
+name: GTA SA DC KGL (Pewniak)
 
 on:
   push:
@@ -7,45 +7,53 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Zgodnie z dokumentacją GitHuba - wymusza stabilność i ucisza błędy Node 24
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     
     steps:
       - name: "Pobranie kodu"
         uses: actions/checkout@v4
 
-      - name: "Kompilacja Gry w Dockerze"
+      - name: "1. Kompilacja ELF (Make)"
         run: |
-          docker run --rm -v ${{ github.workspace }}:/src nold360/kallistios-sdk /bin/bash -c "
-            set -ex
-            cd /src
-            
-            echo '--- Kompilacja Gry (KGL jest wbudowane w KOS) ---'
-            make
-            
-            echo '--- Tworzenie obrazu plyty ---'
-            sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
-            scramble main.bin 1ST_READ.BIN
-            
-            echo 'Hardware ID   : SEGA SEGAKATANA' > ip.txt
-            echo 'Maker ID      : SEGA ENTERPRISES' >> ip.txt
-            echo 'Device Info   : 0x0000 GD-ROM1/1 0000000000000000' >> ip.txt
-            echo 'Area Symbols  : 0x00000000' >> ip.txt
-            echo 'Peripherals   : 0x00000000' >> ip.txt
-            echo 'Product Number: 0000000000000000' >> ip.txt
-            echo 'Version       : V1.000' >> ip.txt
-            echo 'Release Date  : 20230101' >> ip.txt
-            echo 'Boot Filename : 1ST_READ.BIN' >> ip.txt
-            echo 'SW Maker Name : GITHUB' >> ip.txt
-            echo 'Game Title    : GTA SA DC' >> ip.txt
-            
-            makeip ip.txt IP.BIN
-            genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
-            cdi4dc game.iso MojaGra_GTA.cdi -d
-          "
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk make
 
-      - name: "Naprawa uprawnien plikow (Srebrna Kula)"
-        run: sudo chmod -R 777 ${{ github.workspace }}
+      - name: "2. Tworzenie main.bin"
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
 
-      - name: "Zapisanie pliku .cdi"
+      - name: "3. Scramble (Bootsector)"
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk scramble main.bin 1ST_READ.BIN
+
+      - name: "4. Przygotowanie IP.TXT"
+        run: |
+          echo "Hardware ID   : SEGA SEGAKATANA" > ip.txt
+          echo "Maker ID      : SEGA ENTERPRISES" >> ip.txt
+          echo "Device Info   : 0x0000 GD-ROM1/1 0000000000000000" >> ip.txt
+          echo "Area Symbols  : 0x00000000" >> ip.txt
+          echo "Peripherals   : 0x00000000" >> ip.txt
+          echo "Product Number: 0000000000000000" >> ip.txt
+          echo "Version       : V1.000" >> ip.txt
+          echo "Release Date  : 20230101" >> ip.txt
+          echo "Boot Filename : 1ST_READ.BIN" >> ip.txt
+          echo "SW Maker Name : GITHUB" >> ip.txt
+          echo "Game Title    : GTA SA DC" >> ip.txt
+
+      - name: "5. Tworzenie IP.BIN"
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk makeip ip.txt IP.BIN
+
+      - name: "6. Tworzenie ISO"
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
+
+      - name: "7. Konwersja na finalny plik CDI"
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk cdi4dc game.iso MojaGra_GTA.cdi -d
+
+      - name: "Zapisanie pliku .cdi (Artifacts)"
         uses: actions/upload-artifact@v4
         with:
           name: GTA-SA-CDI
