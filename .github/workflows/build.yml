@@ -1,4 +1,4 @@
-name: GTA SA DC GLdc
+name: GTA SA DC KGL
 
 on:
   push:
@@ -7,31 +7,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     
     steps:
       - name: "Pobranie kodu"
         uses: actions/checkout@v4
 
-      - name: "Pobranie GLdc"
-        run: git clone https://github.com/Kazade/GLdc.git
-
-      - name: "Kompilacja i pakowanie w Dockerze"
+      - name: "Kompilacja Gry w Dockerze"
         run: |
-          docker run --rm -u $(id -u):$(id -g) -v ${{ github.workspace }}:/src nold360/kallistios-sdk /bin/bash -c "
+          docker run --rm -v ${{ github.workspace }}:/src nold360/kallistios-sdk /bin/bash -c "
             set -ex
             cd /src
             
-            echo '--- Kompilacja GLdc ---'
-            cd GLdc
-            make -j4
-            cd ..
-            
-            echo '--- Kompilacja Gry ---'
+            echo '--- Kompilacja Gry (KGL jest wbudowane w KOS) ---'
             make
             
-            echo '--- Tworzenie obrazu ---'
+            echo '--- Tworzenie obrazu plyty ---'
             sh-elf-objcopy -R .stack -O binary my_game.elf main.bin
             scramble main.bin 1ST_READ.BIN
             
@@ -50,17 +40,13 @@ jobs:
             makeip ip.txt IP.BIN
             genisoimage -V GTA_SA_DC -G IP.BIN -joliet -rock -l -o game.iso 1ST_READ.BIN
             cdi4dc game.iso MojaGra_GTA.cdi -d
-            
-            echo '--- Poszukiwanie pliku CDI ---'
-            find /src -name '*.cdi'
-            ls -la /src
           "
+
+      - name: "Naprawa uprawnien plikow (Srebrna Kula)"
+        run: sudo chmod -R 777 ${{ github.workspace }}
 
       - name: "Zapisanie pliku .cdi"
         uses: actions/upload-artifact@v4
         with:
           name: GTA-SA-CDI
-          path: |
-            MojaGra_GTA.cdi
-            *.cdi
-          if-no-files-found: error
+          path: MojaGra_GTA.cdi
